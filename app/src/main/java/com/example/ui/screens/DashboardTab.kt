@@ -66,6 +66,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.p2p.NetworkState
+import com.example.p2p.P2pState
 import com.example.ui.MeshViewModel
 import com.example.ui.theme.MeshAmberWarning
 import com.example.ui.theme.MeshCharcoalVariant
@@ -85,6 +86,8 @@ fun DashboardTab(
 ) {
     val context = LocalContext.current
     val networkState by viewModel.networkState.collectAsStateWithLifecycle()
+    val p2pState by viewModel.p2pState.collectAsStateWithLifecycle()
+    val reflexiveAddress by viewModel.localReflexiveAddress.collectAsStateWithLifecycle()
     val activePeers by viewModel.activePeers.collectAsStateWithLifecycle()
     val totalBytes by viewModel.totalHostedBytes.collectAsStateWithLifecycle()
     val isPowerSaver by viewModel.isPowerSavingMode.collectAsStateWithLifecycle()
@@ -262,9 +265,43 @@ fun DashboardTab(
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             MetricCard(
+                title = "STUN Public IP",
+                value = if (reflexiveAddress.isNotBlank()) reflexiveAddress.split(":").firstOrNull() ?: "DISCOVERED" else "STUN Probe...",
+                subtitle = if (reflexiveAddress.isNotBlank()) "Port: ${reflexiveAddress.split(":").getOrNull(1) ?: "19302"}" else "CGNAT Traversal",
+                icon = Icons.Default.QrCode,
+                iconTint = MeshCyanSecondary,
+                modifier = Modifier.weight(1f)
+            )
+
+            MetricCard(
+                title = "Transport State",
+                value = when (p2pState) {
+                    is com.example.p2p.P2pState.Connected -> "CONNECTED"
+                    is com.example.p2p.P2pState.Connecting -> "CONNECTING"
+                    is com.example.p2p.P2pState.Reconnecting -> "RETRYING"
+                    is com.example.p2p.P2pState.Failed -> "FAILED"
+                    else -> "IDLE"
+                },
+                subtitle = p2pState.description.take(26),
+                icon = Icons.Default.CheckCircle,
+                iconTint = when (p2pState) {
+                    is com.example.p2p.P2pState.Connected -> MeshEmeraldAccent
+                    is com.example.p2p.P2pState.Reconnecting -> MeshAmberWarning
+                    is com.example.p2p.P2pState.Failed -> Color.Red
+                    else -> MeshCyanPrimary
+                },
+                modifier = Modifier.weight(1f)
+            )
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            MetricCard(
                 title = "Mesh Peers",
                 value = "${activePeers.size}",
-                subtitle = "Local mDNS discovered",
+                subtitle = "mDNS + ICE discovered",
                 icon = Icons.Default.Wifi,
                 iconTint = MeshCyanSecondary,
                 modifier = Modifier.weight(1f)

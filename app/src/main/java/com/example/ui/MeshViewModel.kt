@@ -11,6 +11,7 @@ import com.example.p2p.NetworkState
 import com.example.p2p.NodeIdentityManager
 import com.example.p2p.P2pNetworkManager
 import com.example.p2p.P2pService
+import com.example.p2p.P2pState
 import com.example.p2p.PacketType
 import com.example.p2p.data.MeshDatabase
 import com.example.p2p.data.MeshRepository
@@ -33,6 +34,8 @@ class MeshViewModel(
     val publicKeyHex: String = identityManager.publicKeyHex
 
     val networkState: StateFlow<NetworkState> = networkManager.networkState
+    val p2pState: StateFlow<P2pState> = networkManager.p2pState
+    val localReflexiveAddress: StateFlow<String> = networkManager.localReflexiveAddress
     val activePeers: StateFlow<List<DiscoveredPeer>> = networkManager.activePeers
     val isPowerSavingMode: StateFlow<Boolean> = networkManager.isPowerSavingMode
 
@@ -167,6 +170,10 @@ class MeshViewModel(
         viewModelScope.launch {
             repository.clearLedger()
         }
+    }
+
+    fun retryConnection() {
+        networkManager.startNetwork()
     }
 
     fun togglePowerSaverMode() {

@@ -13,7 +13,12 @@ enum class PacketType {
     DATA_STORE,
     CHAT_MESSAGE,
     ROUTE_ANNOUNCE,
-    DISCOVERY
+    DISCOVERY,
+    ICE_OFFER,
+    ICE_ANSWER,
+    ICE_CANDIDATE,
+    ICE_PUNCH,
+    STUN_BIND
 }
 
 /**

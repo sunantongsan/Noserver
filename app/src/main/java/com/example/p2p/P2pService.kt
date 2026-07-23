@@ -9,6 +9,10 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
+import android.net.NetworkRequest
 import android.os.BatteryManager
 import android.os.Binder
 import android.os.Build
@@ -28,7 +32,8 @@ import kotlinx.coroutines.launch
 
 /**
  * Android Foreground Service maintaining the living P2P node network in the background.
- * Manages WakeLock and battery level monitoring for smart power throttling.
+ * Features automatic network handoff (Wi-Fi <-> 4G/5G) detection, battery monitoring,
+ * and dynamic state notifications.
  */
 class P2pService : Service() {
 
@@ -46,6 +51,7 @@ class P2pService : Service() {
 
     private var wakeLock: PowerManager.WakeLock? = null
     private var batteryReceiver: BroadcastReceiver? = null
+    private var networkCallback: ConnectivityManager.NetworkCallback? = null
 
     private val _batteryLevel = MutableStateFlow(100)
     val batteryLevel: StateFlow<Int> = _batteryLevel.asStateFlow()
@@ -59,27 +65,37 @@ class P2pService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        Log.d(tag, "P2pService onCreate initialized")
+        Log.d(tag, "P2pService initializing...")
 
         val identity = NodeIdentityManager(applicationContext)
         identityManager = identity
-        networkManager = P2pNetworkManager(applicationContext, identity)
+        val netManager = P2pNetworkManager(applicationContext, identity)
+        networkManager = netManager
 
         createNotificationChannel()
-        startForeground(notificationId, buildNotification("Node initializing..."))
+        startForeground(notificationId, buildNotification("Node Initializing • STUN/mDNS..."))
 
         acquireWakeLock()
         registerBatteryMonitoring()
+        registerNetworkConnectivityMonitoring()
 
-        networkManager?.startNetwork()
+        netManager.startNetwork()
 
-        // Observe peer updates to refresh ongoing notification
+        // Observe detailed P2pState to update ongoing foreground notification
         scope.launch {
-            networkManager?.activePeers?.collect { peers ->
-                val statusText = if (peers.isEmpty()) {
-                    "Mesh Node Online • Scanning for peers..."
-                } else {
-                    "Mesh Node Online • ${peers.size} peer(s) connected"
+            netManager.p2pState.collect { state ->
+                val statusText = when (state) {
+                    is P2pState.Connected -> {
+                        if (state.activePeersCount == 0) {
+                            "Mesh Node Online • Searching peers..."
+                        } else {
+                            "Mesh Node Connected • ${state.activePeersCount} peer(s) (${state.transportType.name})"
+                        }
+                    }
+                    is P2pState.Connecting -> "Connecting • ${state.step}"
+                    is P2pState.Reconnecting -> "Reconnecting (${state.attempt}/${state.maxAttempts} in ${state.nextRetryDelayMs / 1000}s)"
+                    is P2pState.Failed -> "Connection Error • ${state.errorMessage}"
+                    is P2pState.Disconnected -> "Node Offline"
                 }
                 updateNotification(statusText)
             }
@@ -97,12 +113,13 @@ class P2pService : Service() {
     override fun onBind(intent: Intent?): IBinder = binder
 
     override fun onDestroy() {
-
+        Log.i(tag, "P2pService destroying...")
+        unregisterNetworkConnectivityMonitoring()
         unregisterBatteryMonitoring()
         releaseWakeLock()
 
         networkManager?.stopNetwork()
-        Log.d(tag, "P2pService destroyed")
+        Log.d(tag, "P2pService destroyed completely")
         super.onDestroy()
     }
 
@@ -113,7 +130,7 @@ class P2pService : Service() {
                 PowerManager.PARTIAL_WAKE_LOCK,
                 "LivingMesh::P2pServiceWakeLock"
             ).apply {
-                acquire(10 * 60 * 1000L /* 10 minutes timeout */)
+                acquire(10 * 60 * 1000L /* 10 minute wake lock timeout */)
             }
         }
     }
@@ -127,6 +144,43 @@ class P2pService : Service() {
             Log.w(tag, "Error releasing wake lock: ${e.message}")
         }
         wakeLock = null
+    }
+
+    private fun registerNetworkConnectivityMonitoring() {
+        try {
+            val connectivityManager = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+            val request = NetworkRequest.Builder()
+                .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
+                .addTransportType(NetworkCapabilities.TRANSPORT_CELLULAR)
+                .build()
+
+            networkCallback = object : ConnectivityManager.NetworkCallback() {
+                override fun onAvailable(network: Network) {
+                    Log.i(tag, "Network connection established/switched: $network")
+                    networkManager?.handleNetworkChanged()
+                }
+
+                override fun onLost(network: Network) {
+                    Log.w(tag, "Network lost: $network")
+                    networkManager?.handleNetworkChanged()
+                }
+            }
+
+            connectivityManager.registerNetworkCallback(request, networkCallback as ConnectivityManager.NetworkCallback)
+        } catch (e: Exception) {
+            Log.e(tag, "Failed to register network callback: ${e.message}")
+        }
+    }
+
+    private fun unregisterNetworkConnectivityMonitoring() {
+        networkCallback?.let {
+            try {
+                val connectivityManager = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+                connectivityManager.unregisterNetworkCallback(it)
+            } catch (_: Exception) {}
+        }
+        networkCallback = null
     }
 
     private fun registerBatteryMonitoring() {
@@ -188,7 +242,7 @@ class P2pService : Service() {
         val pendingIntent = PendingIntent.getActivity(this, 0, notificationIntent, pendingIntentFlags)
 
         return NotificationCompat.Builder(this, notificationChannelId)
-            .setContentTitle("The Living Mesh")
+            .setContentTitle("The Living Mesh P2P Node")
             .setContentText(contentText)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
             .setContentIntent(pendingIntent)
