@@ -1,0 +1,6 @@
+{
+  "name": "The Living Mesh",
+  "description": "Decentralized, serverless P2P Android storage network node",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
