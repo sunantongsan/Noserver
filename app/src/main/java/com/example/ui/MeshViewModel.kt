@@ -5,14 +5,22 @@ import android.content.Intent
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.example.p2p.CryptoSharder
 import com.example.p2p.DataPacket
 import com.example.p2p.DiscoveredPeer
+import com.example.p2p.EnergyPolicyState
 import com.example.p2p.NetworkState
 import com.example.p2p.NodeIdentityManager
 import com.example.p2p.P2pNetworkManager
 import com.example.p2p.P2pService
 import com.example.p2p.P2pState
 import com.example.p2p.PacketType
+import com.example.p2p.ResourceScheduler
+import com.example.p2p.YieldEngine
+import com.example.p2p.YieldMetrics
+import com.example.p2p.data.ContentEntity
+import com.example.p2p.data.CrdtSyncEngine
+import com.example.p2p.data.LocalAppDatabase
 import com.example.p2p.data.MeshDatabase
 import com.example.p2p.data.MeshRepository
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -28,6 +36,13 @@ class MeshViewModel(
 
     private val identityManager = NodeIdentityManager(context.applicationContext)
     val networkManager = P2pNetworkManager(context.applicationContext, identityManager)
+    val resourceScheduler = ResourceScheduler(context.applicationContext)
+    val yieldEngine = YieldEngine(context.applicationContext, identityManager)
+    val cryptoSharder = CryptoSharder(identityManager)
+
+    private val localAppDb = LocalAppDatabase.getInstance(context.applicationContext)
+    val crdtSyncEngine = CrdtSyncEngine(localAppDb.contentDao(), identityManager)
+
     private val repository: MeshRepository
 
     val nodeId: String = identityManager.nodeId
@@ -38,6 +53,9 @@ class MeshViewModel(
     val localReflexiveAddress: StateFlow<String> = networkManager.localReflexiveAddress
     val activePeers: StateFlow<List<DiscoveredPeer>> = networkManager.activePeers
     val isPowerSavingMode: StateFlow<Boolean> = networkManager.isPowerSavingMode
+
+    val energyPolicy: StateFlow<EnergyPolicyState> = resourceScheduler.energyPolicy
+    val yieldMetrics: StateFlow<YieldMetrics> = yieldEngine.yieldMetrics
 
     private val _recentPackets = MutableStateFlow<List<DataPacket>>(emptyList())
     val recentPackets: StateFlow<List<DataPacket>> = _recentPackets.asStateFlow()
@@ -53,6 +71,7 @@ class MeshViewModel(
 
     val storedPackets: StateFlow<List<DataPacket>>
     val totalHostedBytes: StateFlow<Long>
+    val crdtContentList: StateFlow<List<ContentEntity>>
 
     init {
         val db = MeshDatabase.getInstance(context.applicationContext)
@@ -70,17 +89,38 @@ class MeshViewModel(
             initialValue = 0L
         )
 
+        crdtContentList = localAppDb.contentDao().getAllActiveContent().stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+
+        // Sync hosted bytes with yield engine
+        viewModelScope.launch {
+            totalHostedBytes.collect { bytes ->
+                yieldEngine.updateStorageProvided(bytes)
+            }
+        }
+
         // Start P2P network manager
         networkManager.startNetwork()
 
         // Listen for incoming packets
         viewModelScope.launch {
             networkManager.incomingPackets.collect { packet ->
+                // Record packet routed metric
+                yieldEngine.recordPacketRouted()
+
                 // Add to recent packet list (up to 50 items)
                 val current = _recentPackets.value.toMutableList()
                 current.add(0, packet)
                 if (current.size > 50) current.removeAt(current.size - 1)
                 _recentPackets.value = current
+
+                // Automatically handle CRDT Sync delta packets
+                if (packet.packetType == PacketType.CRDT_DELTA) {
+                    crdtSyncEngine.processSyncDeltaPacket(packet)
+                }
 
                 // Automatically store DATA_STORE packets in local Room database
                 if (packet.packetType == PacketType.DATA_STORE) {
@@ -200,6 +240,58 @@ class MeshViewModel(
             networkManager.startNetwork()
             _isServiceRunning.value = true
         }
+    }
+
+    fun upsertCrdtItem(key: String, value: String) {
+        if (key.isBlank()) return
+        viewModelScope.launch {
+            val signedEntity = crdtSyncEngine.upsertLocalContent(key, value)
+            val deltaPacket = crdtSyncEngine.createDeltaPacket(listOf(signedEntity))
+            networkManager.broadcastPacket(deltaPacket.payload, PacketType.CRDT_DELTA)
+        }
+    }
+
+    fun applyCrdtCounter(key: String, delta: Long) {
+        if (key.isBlank()) return
+        viewModelScope.launch {
+            val signedEntity = crdtSyncEngine.applyPnCounterDelta(key, delta)
+            val deltaPacket = crdtSyncEngine.createDeltaPacket(listOf(signedEntity))
+            networkManager.broadcastPacket(deltaPacket.payload, PacketType.CRDT_DELTA)
+        }
+    }
+
+    fun broadcastCrdtSync() {
+        viewModelScope.launch {
+            val deltaList = crdtSyncEngine.generateSyncDelta(0L)
+            if (deltaList.isNotEmpty()) {
+                val packet = crdtSyncEngine.createDeltaPacket(deltaList)
+                networkManager.broadcastPacket(packet.payload, PacketType.CRDT_DELTA)
+            }
+        }
+    }
+
+    fun shardAndHostData(plainText: String) {
+        if (plainText.isBlank()) return
+        viewModelScope.launch {
+            val shardingResult = cryptoSharder.encryptAndShard(plainText.toByteArray(Charsets.UTF_8))
+            shardingResult.shards.forEach { shard ->
+                val packet = DataPacket(
+                    senderNodeId = nodeId,
+                    targetNodeId = "SHARD_HOST",
+                    payload = shard.toJson(),
+                    packetType = PacketType.SHARD_CHUNK
+                ).signPacket(identityManager)
+
+                repository.savePacket(packet, isVerified = true)
+                networkManager.broadcastPacket(packet.payload, PacketType.SHARD_CHUNK)
+            }
+        }
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        resourceScheduler.stopMonitoring()
+        yieldEngine.stop()
     }
 
     class Factory(private val context: Context) : ViewModelProvider.Factory {

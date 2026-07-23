@@ -125,12 +125,18 @@ class P2pService : Service() {
 
     private fun acquireWakeLock() {
         if (wakeLock == null) {
-            val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
-            wakeLock = powerManager.newWakeLock(
-                PowerManager.PARTIAL_WAKE_LOCK,
-                "LivingMesh::P2pServiceWakeLock"
-            ).apply {
-                acquire(10 * 60 * 1000L /* 10 minute wake lock timeout */)
+            try {
+                val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
+                wakeLock = powerManager.newWakeLock(
+                    PowerManager.PARTIAL_WAKE_LOCK,
+                    "LivingMesh::P2pServiceWakeLock"
+                ).apply {
+                    setReferenceCounted(false)
+                    acquire(10 * 60 * 1000L /* 10 minute wake lock timeout */)
+                }
+                Log.d(tag, "Partial WakeLock acquired safely")
+            } catch (e: Exception) {
+                Log.w(tag, "Failed to acquire wake lock: ${e.message}")
             }
         }
     }
