@@ -49,7 +49,6 @@ class P2pService : Service() {
     var networkManager: P2pNetworkManager? = null
         private set
 
-    private var wakeLock: PowerManager.WakeLock? = null
     private var batteryReceiver: BroadcastReceiver? = null
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
 
@@ -75,7 +74,6 @@ class P2pService : Service() {
         createNotificationChannel()
         startForeground(notificationId, buildNotification("Node Initializing • STUN/mDNS..."))
 
-        acquireWakeLock()
         registerBatteryMonitoring()
         registerNetworkConnectivityMonitoring()
 
@@ -116,40 +114,10 @@ class P2pService : Service() {
         Log.i(tag, "P2pService destroying...")
         unregisterNetworkConnectivityMonitoring()
         unregisterBatteryMonitoring()
-        releaseWakeLock()
 
         networkManager?.stopNetwork()
         Log.d(tag, "P2pService destroyed completely")
         super.onDestroy()
-    }
-
-    private fun acquireWakeLock() {
-        if (wakeLock == null) {
-            try {
-                val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
-                wakeLock = powerManager.newWakeLock(
-                    PowerManager.PARTIAL_WAKE_LOCK,
-                    "LivingMesh::P2pServiceWakeLock"
-                ).apply {
-                    setReferenceCounted(false)
-                    acquire(10 * 60 * 1000L /* 10 minute wake lock timeout */)
-                }
-                Log.d(tag, "Partial WakeLock acquired safely")
-            } catch (e: Exception) {
-                Log.w(tag, "Failed to acquire wake lock: ${e.message}")
-            }
-        }
-    }
-
-    private fun releaseWakeLock() {
-        try {
-            if (wakeLock?.isHeld == true) {
-                wakeLock?.release()
-            }
-        } catch (e: Exception) {
-            Log.w(tag, "Error releasing wake lock: ${e.message}")
-        }
-        wakeLock = null
     }
 
     private fun registerNetworkConnectivityMonitoring() {
