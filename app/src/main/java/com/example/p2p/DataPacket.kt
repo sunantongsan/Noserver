@@ -18,7 +18,10 @@ enum class PacketType {
     ICE_ANSWER,
     ICE_CANDIDATE,
     ICE_PUNCH,
-    STUN_BIND
+    STUN_BIND,
+    CRDT_SYNC,
+    CRDT_DELTA,
+    SHARD_CHUNK
 }
 
 /**
