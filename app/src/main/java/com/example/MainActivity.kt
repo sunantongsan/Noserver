@@ -11,9 +11,10 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import com.example.p2p.AppPreferences
 import com.example.p2p.P2pService
+import com.example.ui.MainNavigationController
 import com.example.ui.MeshViewModel
-import com.example.ui.screens.MainScreen
 import com.example.ui.theme.LivingMeshTheme
 
 class MainActivity : ComponentActivity() {
@@ -22,9 +23,13 @@ class MainActivity : ComponentActivity() {
         MeshViewModel.Factory(applicationContext)
     }
 
+    private lateinit var appPreferences: AppPreferences
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+
+        appPreferences = AppPreferences(applicationContext)
 
         // Request Notification permission for Android 13+ Foreground Service
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -44,7 +49,10 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             LivingMeshTheme {
-                MainScreen(viewModel = viewModel)
+                MainNavigationController(
+                    viewModel = viewModel,
+                    appPreferences = appPreferences
+                )
             }
         }
     }
