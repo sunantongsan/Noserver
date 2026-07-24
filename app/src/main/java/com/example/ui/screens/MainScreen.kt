@@ -174,8 +174,8 @@ fun MainScreen(
                 NavigationBarItem(
                     selected = selectedTab == 2,
                     onClick = { viewModel.setSelectedTab(2) },
-                    icon = { Icon(Icons.Default.Message, contentDescription = "Messages") },
-                    label = { Text("Stream") },
+                    icon = { Icon(Icons.Default.Message, contentDescription = "Social Feed") },
+                    label = { Text("Feed") },
                     colors = NavigationBarItemDefaults.colors(
                         selectedIconColor = MeshObsidianBg,
                         selectedTextColor = MeshCyanPrimary,
@@ -226,7 +226,7 @@ fun MainScreen(
             when (selectedTab) {
                 0 -> DashboardTab(viewModel = viewModel)
                 1 -> PeersTab(viewModel = viewModel)
-                2 -> MessagingTab(viewModel = viewModel)
+                2 -> SocialFeedScreen(viewModel = viewModel)
                 3 -> StorageTab(viewModel = viewModel)
                 4 -> CoinbaseStyleAuthScreen(
                     viewModel = viewModel,
