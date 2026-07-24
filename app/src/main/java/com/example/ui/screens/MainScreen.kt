@@ -228,7 +228,7 @@ fun MainScreen(
                 1 -> PeersTab(viewModel = viewModel)
                 2 -> MessagingTab(viewModel = viewModel)
                 3 -> StorageTab(viewModel = viewModel)
-                4 -> AuthScreen(
+                4 -> CoinbaseStyleAuthScreen(
                     viewModel = viewModel,
                     onContinueToDashboard = { viewModel.setSelectedTab(0) }
                 )

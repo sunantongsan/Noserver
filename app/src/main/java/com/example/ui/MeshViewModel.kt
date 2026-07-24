@@ -43,8 +43,12 @@ class MeshViewModel(
     val cryptoSharder = CryptoSharder(identityManager)
 
     val passkeyAuthManager = PasskeyAuthManager(context.applicationContext)
+    val passkeyWalletManager = com.example.p2p.PasskeyWalletManager(context.applicationContext)
     val accountAbstractionEngine = AccountAbstractionEngine(context.applicationContext, identityManager)
+    val passkeyIdentityAdapter = com.example.p2p.PasskeyIdentityAdapter(context.applicationContext, identityManager, accountAbstractionEngine)
+
     val accountState: StateFlow<com.example.p2p.AccountAbstractionState> = accountAbstractionEngine.authState
+    val coinbaseWalletState: StateFlow<com.example.p2p.CoinbaseSmartWalletState> = passkeyIdentityAdapter.walletState
 
     private val localAppDb = LocalAppDatabase.getInstance(context.applicationContext)
     val crdtSyncEngine = CrdtSyncEngine(localAppDb.contentDao(), identityManager)

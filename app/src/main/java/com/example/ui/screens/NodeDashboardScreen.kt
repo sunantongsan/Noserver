@@ -207,6 +207,14 @@ fun NodeDashboardScreen(
                             color = MeshEmeraldAccent,
                             fontWeight = FontWeight.Bold
                         )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text(
+                            text = "v${com.example.BuildConfig.VERSION_NAME}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MeshTextMuted,
+                            fontFamily = FontFamily.Monospace,
+                            modifier = Modifier.testTag("app_version_tag")
+                        )
                     }
 
                     IconButton(
