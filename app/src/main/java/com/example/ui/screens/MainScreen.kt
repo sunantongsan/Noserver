@@ -16,9 +16,11 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.BatteryChargingFull
 import androidx.compose.material.icons.filled.BatterySaver
 import androidx.compose.material.icons.filled.Dashboard
+import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.Message
 import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.Storage
@@ -198,6 +200,21 @@ fun MainScreen(
                     ),
                     modifier = Modifier.testTag("nav_tab_storage")
                 )
+
+                NavigationBarItem(
+                    selected = selectedTab == 4,
+                    onClick = { viewModel.setSelectedTab(4) },
+                    icon = { Icon(Icons.Default.Fingerprint, contentDescription = "Account") },
+                    label = { Text("Account") },
+                    colors = NavigationBarItemDefaults.colors(
+                        selectedIconColor = MeshObsidianBg,
+                        selectedTextColor = MeshCyanPrimary,
+                        indicatorColor = MeshCyanPrimary,
+                        unselectedIconColor = MeshTextSecondary,
+                        unselectedTextColor = MeshTextSecondary
+                    ),
+                    modifier = Modifier.testTag("nav_tab_account")
+                )
             }
         }
     ) { innerPadding ->
@@ -211,6 +228,10 @@ fun MainScreen(
                 1 -> PeersTab(viewModel = viewModel)
                 2 -> MessagingTab(viewModel = viewModel)
                 3 -> StorageTab(viewModel = viewModel)
+                4 -> AuthScreen(
+                    viewModel = viewModel,
+                    onContinueToDashboard = { viewModel.setSelectedTab(0) }
+                )
             }
         }
     }

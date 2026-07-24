@@ -30,6 +30,7 @@ import androidx.compose.material.icons.filled.BatterySaver
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.MonetizationOn
@@ -101,6 +102,7 @@ fun NodeDashboardScreen(
     val yieldMetrics by viewModel.yieldMetrics.collectAsStateWithLifecycle()
     val isServiceRunning by viewModel.isServiceRunning.collectAsStateWithLifecycle()
     val recentPackets by viewModel.recentPackets.collectAsStateWithLifecycle()
+    val accountState by viewModel.accountState.collectAsStateWithLifecycle()
 
     Column(
         modifier = modifier
@@ -224,6 +226,60 @@ fun NodeDashboardScreen(
                             modifier = Modifier.size(20.dp)
                         )
                     }
+                }
+            }
+        }
+
+        // Account Abstraction & Passkey Quick Badge
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .border(1.dp, MeshCyanPrimary.copy(alpha = 0.25f), RoundedCornerShape(14.dp)),
+            shape = RoundedCornerShape(14.dp),
+            colors = CardDefaults.cardColors(containerColor = MeshSlateSurface)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(14.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Fingerprint,
+                        contentDescription = "Passkey Account",
+                        tint = MeshCyanPrimary,
+                        modifier = Modifier.size(22.dp)
+                    )
+                    Column {
+                        Text(
+                            text = "SMART ACCOUNT (ERC-4337 CONCEPT)",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MeshTextMuted,
+                            fontFamily = FontFamily.Monospace
+                        )
+                        Text(
+                            text = accountState.accountAddress,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MeshCyanPrimary,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = FontFamily.Monospace,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+
+                Button(
+                    onClick = { viewModel.setSelectedTab(4) },
+                    colors = ButtonDefaults.buttonColors(containerColor = MeshCyanPrimary.copy(alpha = 0.2f)),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text("Manage", color = MeshCyanPrimary, style = MaterialTheme.typography.labelMedium)
                 }
             }
         }

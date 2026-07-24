@@ -5,6 +5,7 @@ import android.content.Intent
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.example.p2p.AccountAbstractionEngine
 import com.example.p2p.CryptoSharder
 import com.example.p2p.DataPacket
 import com.example.p2p.DiscoveredPeer
@@ -15,6 +16,7 @@ import com.example.p2p.P2pNetworkManager
 import com.example.p2p.P2pService
 import com.example.p2p.P2pState
 import com.example.p2p.PacketType
+import com.example.p2p.PasskeyAuthManager
 import com.example.p2p.ResourceScheduler
 import com.example.p2p.YieldEngine
 import com.example.p2p.YieldMetrics
@@ -39,6 +41,10 @@ class MeshViewModel(
     val resourceScheduler = ResourceScheduler(context.applicationContext)
     val yieldEngine = YieldEngine(context.applicationContext, identityManager)
     val cryptoSharder = CryptoSharder(identityManager)
+
+    val passkeyAuthManager = PasskeyAuthManager(context.applicationContext)
+    val accountAbstractionEngine = AccountAbstractionEngine(context.applicationContext, identityManager)
+    val accountState: StateFlow<com.example.p2p.AccountAbstractionState> = accountAbstractionEngine.authState
 
     private val localAppDb = LocalAppDatabase.getInstance(context.applicationContext)
     val crdtSyncEngine = CrdtSyncEngine(localAppDb.contentDao(), identityManager)
@@ -286,6 +292,41 @@ class MeshViewModel(
                 networkManager.broadcastPacket(packet.payload, PacketType.SHARD_CHUNK)
             }
         }
+    }
+
+    fun signUpWithPasskey(email: String, onResult: (Boolean, String) -> Unit) {
+        viewModelScope.launch {
+            val result = accountAbstractionEngine.signUpWithEmail(email, passkeyAuthManager)
+            if (result.isSuccess) {
+                onResult(true, "Passkey Account Abstraction Active")
+            } else {
+                onResult(false, result.exceptionOrNull()?.message ?: "Sign up failed")
+            }
+        }
+    }
+
+    fun signInWithPasskey(email: String = "", onResult: (Boolean, String) -> Unit) {
+        viewModelScope.launch {
+            val result = accountAbstractionEngine.signInWithPasskey(passkeyAuthManager, email)
+            if (result.isSuccess) {
+                onResult(true, "Signed in with Passkey")
+            } else {
+                onResult(false, result.exceptionOrNull()?.message ?: "Sign in failed")
+            }
+        }
+    }
+
+    fun recoverAccountFromMesh(email: String, recoveryShareJson: String, onResult: (Boolean, String) -> Unit) {
+        val result = accountAbstractionEngine.recoverAccountFromMesh(email, recoveryShareJson)
+        if (result.isSuccess) {
+            onResult(true, "Account recovered from 2-of-3 Mesh Shares")
+        } else {
+            onResult(false, result.exceptionOrNull()?.message ?: "Recovery failed")
+        }
+    }
+
+    fun signOutAccount() {
+        accountAbstractionEngine.signOut()
     }
 
     override fun onCleared() {
